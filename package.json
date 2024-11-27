@@ -1,0 +1,31 @@
+{
+  "name": "trade-monitor",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "axios": "^1.7.7",
+    "csvtojson": "^2.0.10",
+    "express": "^4.21.1",
+    "ioredis": "^5.4.1",
+    "prisma": "^5.22.0",
+    "protobufjs": "^7.4.0",
+    "socket.io": "^4.8.1",
+    "upstox-js-sdk": "^2.11.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.9.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}
