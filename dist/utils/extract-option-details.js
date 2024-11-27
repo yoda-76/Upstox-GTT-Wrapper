@@ -1,23 +1,19 @@
+"use strict";
 // export function extractOptionDetails(tradingSymbol) {
 //     // Regular expression to capture the base instrument, year, month/day, strike, and option type (CE/PE)
 //     const regex = /([A-Z]+)(\d{2})([A-Z]{1}\d{1,2}[A-Z]{0,2}|\w{3})(\d+)(CE|PE)/;
-
 //     const match = tradingSymbol.match(regex);
-    
 //     if (!match) {
 //         throw new Error('Invalid trading symbol format');
 //     }
-
 //     const baseInstrument = match[1];
 //     const year = `20${match[2]}`;  // Extract last two digits of the year, assuming 20xx.
 //     const monthOrDay = match[3];    // Could be month (OCT) or day format (O01).
 //     const strike = match[4];
 //     const optionType = match[5];
 //     console.log(baseInstrument, year, monthOrDay, strike, optionType);
-    
 //     let expiry; 
 //     const lastExpMonths = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-
 //     // Handling expiry for month names (e.g., OCT, NOV, DEC)
 //     if(lastExpMonths.includes(monthOrDay)){
 //       const monthMapping = {
@@ -47,7 +43,6 @@
 //     }else{
 //       expiry = `${year}-0${monthOrDay[0]}-${monthOrDay[1]}${monthOrDay[2]}`
 //     }
-
 //     return {
 //         baseInstrument,
 //         expiry,
