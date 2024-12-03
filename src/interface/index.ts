@@ -20,8 +20,8 @@ export interface OrderDetails {
   export interface OrderQueue {
     orderId: number;
     orderDetails: OrderDetails;
-    brokerOrderDetails: upstoxOrderDetails | zerodhaOrderDetails;
-    brokerOrderDetailsSL: upstoxOrderDetails | zerodhaOrderDetails;
+    brokerOrderDetails: upstoxOrderDetails ;
+    brokerOrderDetailsSL: upstoxOrderDetails ;
     brokerEntryOrderId: string;
     brokerExitOrderId: string;
     ltp:number;
@@ -48,15 +48,15 @@ export interface OrderDetails {
   }
 
   export interface zerodhaOrderDetails {
-    quantity: number,
-    product:  "I" | "D",
-    validity: "DAY",
-    price: number,
-    tag: "string",
-    instrument_token: string,
-    order_type: "LIMIT" | "MARKET" | "SL" | "SL-M",
+    tradingsymbol: string,
+    exchange: string,
+    last_price: number,
+    trigger_values: number[],
+    orders: GTTDetails[],
+  }
+
+  export interface GTTDetails {
     transaction_type: "BUY" | "SELL",
-    disclosed_quantity: number,
-    trigger_price: number,
-    is_amo: boolean,
+    quantity: number,
+    price: number
   }

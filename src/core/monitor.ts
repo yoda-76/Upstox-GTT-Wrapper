@@ -1,6 +1,6 @@
 import axios from "axios";
 import { UpstoxBroker } from "../brokers/upstox";
-import { OrderDetails, OrderQueue, upstoxOrderDetails, zerodhaOrderDetails } from "../interface";
+import { OrderDetails, OrderQueue, upstoxOrderDetails } from "../interface";
 import { socketRedisClient } from "../lib/redis";
 // const upstox_access_token=process.env.UPSTOX_ACCESS_TOKEN || "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiJLTDI3NzAiLCJqdGkiOiI2NzQ2ZDg1MDU4Y2Q2NzM1N2IzMjY2NTAiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaWF0IjoxNzMyNjk2MTQ0LCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3MzI3NDQ4MDB9.kzn4naH8DRTcHqt4QGwRTMujronP_a-JGz68Lurgqv4"
 export class Monitor {
@@ -26,7 +26,7 @@ export class Monitor {
         socketRedisClient.subscribe("market-data");
         socketRedisClient.on("message", (channel, message) => {
         const ticks = JSON.parse(message);
-        console.log(ticks);
+        // console.log(ticks);
         this.orderQueue.forEach(async (order) => {
             //updating order queue ltp
             const ltp=ticks.feeds[order.brokerOrderDetails.instrument_token].ltpc.ltp;
@@ -39,7 +39,7 @@ export class Monitor {
                     this.orderQueue[order.orderId].status = "ENTRY";
                     try {
                         const upstoxBroker = UpstoxBroker.getInstance();
-                        const response = await upstoxBroker.placeOrder(this.upstox_access_token, order.brokerOrderDetails);
+                        const response = await upstoxBroker.placeOrder(this.upstox_access_token, order.brokerOrderDetails, order.orderDetails.baseInstrument);
                     } catch (error) {
                         console.log("error", error);
                         this.orderQueue[order.orderId].status = "OPEN";
@@ -51,7 +51,7 @@ export class Monitor {
                     console.log("TARGET HIT")
                     const upstoxBroker = UpstoxBroker.getInstance();
                     const orderData:upstoxOrderDetails = {...order.brokerOrderDetails,transaction_type:order.brokerOrderDetails.transaction_type==="BUY"?"SELL":"BUY"}
-                    const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData);
+                    const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData, order.orderDetails.baseInstrument);
                     this.orderQueue[order.orderId].brokerExitOrderId = order_id;
                     this.orderQueue[order.orderId].closedAt = new Date();
                     this.orderQueue[order.orderId].status = "CLOSED";
@@ -62,7 +62,7 @@ export class Monitor {
                     console.log("SL HIT")
                     const upstoxBroker = UpstoxBroker.getInstance();
                     const orderData:upstoxOrderDetails = {...order.brokerOrderDetails,transaction_type:order.brokerOrderDetails.transaction_type==="BUY"?"SELL":"BUY"}
-                    const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData);
+                    const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData, order.orderDetails.baseInstrument);
                     this.orderQueue[order.orderId].brokerExitOrderId = order_id;
                     this.orderQueue[order.orderId].closedAt = new Date();
                     this.orderQueue[order.orderId].status = "CLOSED";
@@ -81,8 +81,8 @@ export class Monitor {
         console.log(order)
         const orderId = this.currentIndex++
         let instrumentDetails:any;
-        let brokerOrderDetails:upstoxOrderDetails | zerodhaOrderDetails;
-        let brokerOrderDetailsSL:upstoxOrderDetails | zerodhaOrderDetails;
+        let brokerOrderDetails:upstoxOrderDetails;
+        let brokerOrderDetailsSL:upstoxOrderDetails;
 
         // get broker specific data and store it too in orderQueue so that when we need to place order it wont waste time to search it from broker's instrumentData.
         if(order.broker === "UPSTOX"){
@@ -91,6 +91,7 @@ export class Monitor {
             if(order.instrumentType === "OPT"){
                 if(!order.optionType) return new Error('Option type not found');
                 instrumentDetails = brokerInstrumentData[order.exchange][order.baseInstrument][`${order.expiry} : ${order.strike}.0`][order.optionType];
+                console.log(instrumentDetails)
             }
             else if(order.instrumentType === "EQ"){
                 instrumentDetails = brokerInstrumentData[order.exchange].EQUITY[order.baseInstrument];
@@ -98,9 +99,11 @@ export class Monitor {
             //TODO: check if order already exists, if yes add to quantity, do not add a second order
 
             const existingOrder = this.orderQueue.filter(o=>(o.brokerOrderDetails.instrument_token === instrumentDetails.instrument_key));
-            if(existingOrder){
+            if(existingOrder[0]){
+                console.log("c1")
+                if(existingOrder[0].status==="OPEN"){
+                console.log("c2")
 
-                if(existingOrder[0]&&existingOrder[0].status==="OPEN"){
                     const orignalQty = this.orderQueue[existingOrder[0].orderId].orderDetails.qty 
                     this.orderQueue[existingOrder[0].orderId].orderDetails.qty = orignalQty + order.qty
                     this.orderQueue[existingOrder[0].orderId].brokerOrderDetails.quantity = orignalQty + order.qty
@@ -110,6 +113,7 @@ export class Monitor {
                 }
 
             }else{
+                console.log("c3")
 
 
                 brokerOrderDetails={
@@ -154,6 +158,7 @@ export class Monitor {
                     closedReason: null,
                     pnl: null
                 });
+                console.log("order queue: ", this.orderQueue)
             }
             
             
