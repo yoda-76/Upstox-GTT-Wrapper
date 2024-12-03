@@ -31,7 +31,7 @@ class Monitor {
         redis_1.socketRedisClient.subscribe("market-data");
         redis_1.socketRedisClient.on("message", (channel, message) => {
             const ticks = JSON.parse(message);
-            console.log(ticks);
+            // console.log(ticks);
             this.orderQueue.forEach(async (order) => {
                 //updating order queue ltp
                 const ltp = ticks.feeds[order.brokerOrderDetails.instrument_token].ltpc.ltp;
@@ -44,7 +44,7 @@ class Monitor {
                         this.orderQueue[order.orderId].status = "ENTRY";
                         try {
                             const upstoxBroker = upstox_1.UpstoxBroker.getInstance();
-                            const response = await upstoxBroker.placeOrder(this.upstox_access_token, order.brokerOrderDetails);
+                            const response = await upstoxBroker.placeOrder(this.upstox_access_token, order.brokerOrderDetails, order.orderDetails.baseInstrument);
                         }
                         catch (error) {
                             console.log("error", error);
@@ -56,7 +56,7 @@ class Monitor {
                         console.log("TARGET HIT");
                         const upstoxBroker = upstox_1.UpstoxBroker.getInstance();
                         const orderData = { ...order.brokerOrderDetails, transaction_type: order.brokerOrderDetails.transaction_type === "BUY" ? "SELL" : "BUY" };
-                        const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData);
+                        const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData, order.orderDetails.baseInstrument);
                         this.orderQueue[order.orderId].brokerExitOrderId = order_id;
                         this.orderQueue[order.orderId].closedAt = new Date();
                         this.orderQueue[order.orderId].status = "CLOSED";
@@ -65,7 +65,7 @@ class Monitor {
                         console.log("SL HIT");
                         const upstoxBroker = upstox_1.UpstoxBroker.getInstance();
                         const orderData = { ...order.brokerOrderDetails, transaction_type: order.brokerOrderDetails.transaction_type === "BUY" ? "SELL" : "BUY" };
-                        const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData);
+                        const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData, order.orderDetails.baseInstrument);
                         this.orderQueue[order.orderId].brokerExitOrderId = order_id;
                         this.orderQueue[order.orderId].closedAt = new Date();
                         this.orderQueue[order.orderId].status = "CLOSED";
@@ -89,14 +89,17 @@ class Monitor {
                 if (!order.optionType)
                     return new Error('Option type not found');
                 instrumentDetails = brokerInstrumentData[order.exchange][order.baseInstrument][`${order.expiry} : ${order.strike}.0`][order.optionType];
+                console.log(instrumentDetails);
             }
             else if (order.instrumentType === "EQ") {
                 instrumentDetails = brokerInstrumentData[order.exchange].EQUITY[order.baseInstrument];
             }
             //TODO: check if order already exists, if yes add to quantity, do not add a second order
             const existingOrder = this.orderQueue.filter(o => (o.brokerOrderDetails.instrument_token === instrumentDetails.instrument_key));
-            if (existingOrder) {
-                if (existingOrder[0] && existingOrder[0].status === "OPEN") {
+            if (existingOrder[0]) {
+                console.log("c1");
+                if (existingOrder[0].status === "OPEN") {
+                    console.log("c2");
                     const orignalQty = this.orderQueue[existingOrder[0].orderId].orderDetails.qty;
                     this.orderQueue[existingOrder[0].orderId].orderDetails.qty = orignalQty + order.qty;
                     this.orderQueue[existingOrder[0].orderId].brokerOrderDetails.quantity = orignalQty + order.qty;
@@ -107,6 +110,7 @@ class Monitor {
                 }
             }
             else {
+                console.log("c3");
                 brokerOrderDetails = {
                     quantity: order.qty,
                     product: order.productType,
@@ -148,6 +152,7 @@ class Monitor {
                     closedReason: null,
                     pnl: null
                 });
+                console.log("order queue: ", this.orderQueue);
             }
         }
         else {

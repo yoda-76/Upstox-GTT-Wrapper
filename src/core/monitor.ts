@@ -29,7 +29,8 @@ export class Monitor {
         // console.log(ticks);
         this.orderQueue.forEach(async (order) => {
             //updating order queue ltp
-            const ltp=ticks.feeds[order.brokerOrderDetails.instrument_token].ltpc.ltp;
+            let ltp:any=undefined;
+            if(ticks.feeds[order.brokerOrderDetails.instrument_token]) ltp=ticks.feeds[order.brokerOrderDetails.instrument_token].ltpc.ltp;
             if(ltp){
                 this.orderQueue[order.orderId].ltp = ltp
                 //if either entry or exit condition is met, place order accordingly

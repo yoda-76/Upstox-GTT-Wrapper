@@ -9,6 +9,7 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const zlib_1 = __importDefault(require("zlib"));
 const csvtojson_1 = __importDefault(require("csvtojson"));
+const order_slicer_1 = require("../../utils/order-slicer");
 const equity_symbols_1 = require("../../constant/equity-symbols");
 class UpstoxBroker {
     // Singleton pattern
@@ -29,26 +30,13 @@ class UpstoxBroker {
         return this.instrumentData;
     }
     getInstrumentDataSearchMapAsObject() {
-        console.log(this.instrumentDataSearchMap);
+        // console.log(this.instrumentDataSearchMap);
         return this.instrumentDataSearchMap;
     }
     // Handle access token received via webhook
     // public async handleWebhook(id: string, authcode: string): Promise<string> {
     //   try {
-    //     const currentdate = new Date();
-    //     const acc = extractId(id); // Function to extract ID and determine type (MASTER/CHILD)
-    //     let user_id: string = "";
-    //     let master_id: string = "";
-    //     let userData: MasterAccount | ChildAccount;
-    //     if (acc.type === "CHILD") {
-    //       userData = await dbClient.getChildAccountByUid(acc.id);
-    //       master_id = userData.master_id;
-    //     } else if (acc.type === "MASTER") {
-    //       userData = await dbClient.getMasterAccountByUid(acc.id);
-    //       user_id = userData.user_id;
-    //     } else {
-    //       throw new Error( "Error authorizing with Upstox : .Controllers/Authorization: handleWebhook");
-    //     }
+    //     //fetch userData
     //     // Fetch access token using the authorization code
     //     console.log({
     //       code: authcode,
@@ -75,17 +63,9 @@ class UpstoxBroker {
     //       }
     //     );
     //     // Process the response
-    //     const access_token: string = response.data.access_token;
-    //     let account;
+    //     
     //     // Store the access token in-memory and update DB
-    //     const accountManager = AccountManager.getInstance();
-    //     if (acc.type === "MASTER") {
-    //       await dbClient.updateMasterAccessTokenByUid(acc.id, { access_token, last_token_generated_at: currentdate });
-    //     accountManager.addAuthenticatedAccount(user_id, master_id, "MASTER", userData.key, userData.broker_id, id, userData.id, access_token, "UPSTOCKS");
-    //     } else {
-    //       await dbClient.updateChildAccessTokenByUid(acc.id, { access_token, last_token_generated_at: currentdate });
-    //     accountManager.addAuthenticatedAccount(user_id, master_id, "CHILD", userData.key, userData.broker_id, id, userData.id, access_token, "UPSTOCKS");
-    //     }
+    //     
     //     // Get the singleton instance of AccountManager and add the account
     //     console.log("Access token for account stored successfully.");
     //     return `Access token for account ${id} stored successfully.`
@@ -101,7 +81,7 @@ class UpstoxBroker {
     //   return account.expiresAt > now;
     // }
     // Place order using the access token
-    async placeOrder(access_token, orderDetails) {
+    async placeOrder(access_token, orderDetails, baseInstrument) {
         //check funds first
         try {
             if (!access_token) {
@@ -110,9 +90,9 @@ class UpstoxBroker {
             //check if the quantity exceeds the freeze quqntity for that perticular index? if it does, then slice the order quantity accordingly
             let slicedQty;
             // if()
-            // slicedQty = sliceOrderQuantity(qty, baseInstrument);
-            slicedQty = [orderDetails.quantity];
-            console.log(slicedQty);
+            slicedQty = (0, order_slicer_1.sliceOrderQuantity)(orderDetails.quantity, baseInstrument);
+            // slicedQty = [orderDetails.quantity];
+            // console.log(slicedQty);
             for (let i = 0; i < slicedQty.length; i++) {
                 let config = {
                     url: "https://api.upstox.com/v2/order/place",
@@ -135,183 +115,6 @@ class UpstoxBroker {
             throw error;
         }
     }
-    async cancelOrder(access_token, orderId) {
-        try {
-            // const accountManager = AccountManager.getInstance();
-            // const account = accountManager.getAuthenticatedAccountsAsObject(accountId);
-            let config = {
-                method: 'delete',
-                maxBodyLength: Infinity,
-                url: `https://api-hft.upstox.com/v2/order/cancel?order_id=${orderId}`,
-                headers: {
-                    Accept: "application/json",
-                    Authorization: `Bearer ${access_token}`,
-                }
-            };
-            const response = await (0, axios_1.default)(config);
-            return response.data.data;
-        }
-        catch (error) {
-            throw error;
-        }
-    }
-    async getOrderDetailsByOrderId(access_token, orderId) {
-        try {
-            // const accountManager = AccountManager.getInstance();
-            // const access_token = accountManager.getAccessToken(accountId);
-            let config = {
-                method: 'get',
-                maxBodyLength: Infinity,
-                url: `https://api.upstox.com/v2/order/details?order_id=${orderId}`,
-                headers: {
-                    Accept: "application/json",
-                    Authorization: `Bearer ${access_token}`,
-                }
-            };
-            const response = await (0, axios_1.default)(config);
-            const convertedOrderbook = {
-                symbolName: response.data.data.trading_symbol,
-                type: response.data.data.order_type,
-                side: response.data.data.transaction_type,
-                qty: response.data.data.quantity,
-                remQty: response.data.data.pending_quantity,
-                orderPrice: response.data.data.price,
-                tradedPrice: response.data.data.average_price,
-                triggerPrice: response.data.data.trigger_price,
-                status: response.data.data.status,
-                timeStamp: response.data.data.order_timestamp,
-                orderId: response.data.data.order_id,
-                message: response.data.data.status_message || ""
-            };
-            return convertedOrderbook;
-        }
-        catch (error) {
-            throw error;
-        }
-    }
-    async getPositions(access_token) {
-        try {
-            console.log("at", access_token);
-            let config = {
-                method: 'get',
-                maxBodyLength: Infinity,
-                url: 'https://api.upstox.com/v2/portfolio/short-term-positions',
-                headers: {
-                    Accept: "application/json",
-                    Authorization: `Bearer ${access_token}`,
-                }
-            };
-            const response = await (0, axios_1.default)(config);
-            console.log("position from broker", response.data.data);
-            // let convertedPositions = response.data.data.map((position) => {
-            //   const symbolName = position.trading_symbol
-            //   const symbolDetails = this.instrumentDataSearchMap[symbolName]
-            //   return {
-            //     netQty: position.quantity,                       // Net Qty
-            //     symbolName: position.trading_symbol,             // Symbol name
-            //     baseInstrument: symbolDetails.name,                   // Base Instrument
-            //     instrumentType: symbolDetails.instrument_type,       // Instrument Type
-            //     optionType: symbolDetails.option_type,              //option type
-            //     expiry: symbolDetails.expiry,                            // Expiry
-            //     strike: symbolDetails.strike,                  // Option Type
-            //     ltpToken: symbolDetails.ltpToken?symbolDetails.ltpToken:null,                        // LTP Token
-            //     exchange: position.exchange,                     // Exchange
-            //     action: null,                                    // Action (Buy/Sell based on qty)
-            //     pnl: position.pnl,                               // PnL
-            //     ltp: position.last_price,                        // LTP
-            //     avgPrice: position.average_price,                // Avg Price
-            //     sl: null,                                        // SL (manual entry)
-            //     setSl: null,                                     // Set SL (manual entry)
-            //     target: null,                                    // Target (manual entry)
-            //     targetPrice: null,                               // Target Price (manual entry)
-            //     stopLoss: null,    
-            //     multiplier: position.multiplier,                              // Stop Loss (manual entry)
-            //     buyPrice: position.buy_price,                    // Buy Price
-            //     sellPrice: position.sell_price,                  // Sell Price
-            //     buyQty: position.day_buy_quantity,               // Buy Qty
-            //     sellQty: position.day_sell_quantity,  
-            //     buyValue: position.buy_value,
-            //     sellValue: position.sell_value,                  // Sell Qty
-            //     realisedPnL: position.realised,                  // Realised P&L
-            //     unrealisedPnL: position.unrealised,              // Unrealised P&L
-            //     product: position.product                        // Product
-            //   }
-            // })
-            // console.log("cp",convertedPositions);
-            return response.data.data;
-        }
-        catch (error) {
-            console.log(error);
-        }
-    }
-    // public async getPositionByOrderDetails(accountId: string, orderDetails: OrderDetails) {
-    //   try {
-    //     const accountManager = AccountManager.getInstance();
-    //     const access_token = accountManager.getAccessToken(accountId);
-    //     let config = {
-    //       method: 'get',
-    //     maxBodyLength: Infinity,
-    //       url: 'https://api.upstox.com/v2/portfolio/short-term-positions',
-    //       headers: { 
-    //         Accept: "application/json",
-    //         Authorization: `Bearer ${access_token}`,
-    //       }
-    //     };
-    //     const response = await axios(config)
-    //     console.log("positions from broker", response.data.data);
-    //     let position;
-    //     let instrumentDetails;
-    //     if(orderDetails.exchange === "BSE"){
-    //       throw new Error('BSE not supported');
-    //     }
-    //     if(orderDetails.instrumentType === "OPT"){
-    //       instrumentDetails=  this.instrumentData.NSE[orderDetails.baseInstrument][`${orderDetails.expiry} : ${orderDetails.strike}.0`][orderDetails.optionType]
-    //     }else if(orderDetails.instrumentType === "EQ"){
-    //       instrumentDetails=  this.instrumentData.NSE.EQUITY[orderDetails.baseInstrument]
-    //     }else if(orderDetails.instrumentType === "FUT"){
-    //       throw new Error('Futures not supported');
-    //     }else{ 
-    //       throw new Error('Instrument type not supported');
-    //     }
-    //     response.data.data.map((p: any) => {
-    //       if(p.trading_symbol === instrumentDetails.tradingsymbol) {
-    //         position = p
-    //       }
-    //     })
-    //     console.log({orderDetails,position, instrumentDetails});
-    //     const convertedPosition = {
-    //       netQty: position.quantity,                       // Net Qty
-    //       symbolName: position.trading_symbol,             // Symbol name
-    //       baseInstrument: instrumentDetails.base,                   // Base Instrument
-    //       instrumentType: instrumentDetails.instrument_type,       // Instrument Type
-    //       expiry: instrumentDetails.expiry,                            // Expiry
-    //       strike: instrumentDetails.strike,                             // Strike
-    //       optionType: orderDetails.optionType,                   // Option Type
-    //       ltpToken: instrumentDetails.ltpToken?instrumentDetails.ltpToken:null,                        // LTP Token
-    //       exchange: position.exchange==="NFO" || position.exchange==="NSE"?"NSE":null,                     // Exchange
-    //       action: null,                                    // Action (Buy/Sell based on qty)
-    //       pnl: position.pnl,                               // PnL
-    //       ltp: position.last_price,                        // LTP
-    //       avgPrice: position.average_price,                // Avg Price
-    //       sl: null,                                        // SL (manual entry)
-    //       setSl: null,                                     // Set SL (manual entry)
-    //       target: null,                                    // Target (manual entry)
-    //       setTarget: null,                                 // Set Target (manual entry)
-    //       buyPrice: position.buy_price,                    // Buy Price
-    //       sellPrice: position.sell_price,                  // Sell Price
-    //       buyQty: position.day_buy_quantity,               // Buy Qty
-    //       sellQty: position.day_sell_quantity,             // Sell Qty
-    //       realisedPnL: position.realised,                  // Realised P&L
-    //       unrealisedPnL: position.unrealised,              // Unrealised P&L
-    //       product: position.product                        // Product
-    //     };
-    //     console.log("converted position", convertedPosition);
-    //     return convertedPosition
-    //   }catch (error) {
-    //     throw error;
-    //   }
-    // }
-    // Load instrument data into memory
     async loadInstrumentData() {
         try {
             const folderPath = path_1.default.join(__dirname, 'token_data');
@@ -344,9 +147,6 @@ class UpstoxBroker {
             });
             // Convert CSV to JSON and structure data
             const jsonArray = await (0, csvtojson_1.default)().fromFile(decompressedFilePath);
-            //fetch kite instruments
-            // const kiteAccessToken = await redisClient.get('KITE_CONNECT_access_token');
-            // const kiteInstruments = await fetchInstruments(process.env.KITE_API_KEY, kiteAccessToken);
             this.instrumentData = this.structureInstrumentData(jsonArray); // Structure the data
             console.log('Instrument data loaded into memory and structured');
         }
@@ -540,19 +340,6 @@ class UpstoxBroker {
         const resp = await axios_1.default.get(url, { headers });
         console.log(resp);
         return resp.data.data;
-    }
-    async getTrades(access_token) {
-        let config = {
-            method: 'get',
-            maxBodyLength: Infinity,
-            url: 'https://api.upstox.com/v2/order/trades/get-trades-for-day',
-            headers: {
-                Accept: "application/json",
-                Authorization: `Bearer ${access_token}`,
-            }
-        };
-        const response = await (0, axios_1.default)(config);
-        return response.data.data;
     }
 }
 exports.UpstoxBroker = UpstoxBroker;
