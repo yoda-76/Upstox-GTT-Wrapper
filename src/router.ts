@@ -19,13 +19,13 @@ export const router = (app: Express) => {
         }
     })
 
-    app.post("/place-order", (req: Request, res: Response) => {
+    app.post("/place-order", async (req: Request, res: Response) => {
         try {
             console.log(req.body)
             const {orderDetails, access_token}:{orderDetails : OrderDetails, access_token:string} = req.body
             const monitor = Monitor.getInstance(access_token);
-            monitor.addOrder(orderDetails);
-            res.send("success");
+            const id=await monitor.addOrder(orderDetails);
+            res.json({message:"success", data:{id}});
         } catch (error) {
             console.log(error)
             res.status(500).send("error while placing order in upstox");

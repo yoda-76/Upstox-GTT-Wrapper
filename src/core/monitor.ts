@@ -183,6 +183,7 @@ export class Monitor {
 
         const resp= await axios.post('http://localhost:3001/subscribe', {instrumentKeys:[instrumentDetails.instrument_key]});
             if(resp.status !== 200) throw new Error(resp.data);
+        return orderId
     }
 
     public getOrderQueue() {
