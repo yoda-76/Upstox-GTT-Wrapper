@@ -48,25 +48,36 @@ export class Monitor {
 
                 }
                 else if(order.status === "ENTRY" && (ltp===order.orderDetails.exitPrice || (order.orderDetails.exitRange && ltp >= order.orderDetails.exitRange[0] && ltp <= order.orderDetails.exitRange[1]))){
+                    //check position status of that perticular instrument
                     //place exit order
                     console.log("TARGET HIT")
-                    const upstoxBroker = UpstoxBroker.getInstance();
-                    const orderData:upstoxOrderDetails = {...order.brokerOrderDetails,transaction_type:order.brokerOrderDetails.transaction_type==="BUY"?"SELL":"BUY"}
-                    const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData, order.orderDetails.baseInstrument);
-                    this.orderQueue[order.orderId].brokerExitOrderId = order_id;
-                    this.orderQueue[order.orderId].closedAt = new Date();
                     this.orderQueue[order.orderId].status = "CLOSED";
+                    try {
+                        const upstoxBroker = UpstoxBroker.getInstance();
+                        const orderData:upstoxOrderDetails = {...order.brokerOrderDetails,transaction_type:order.brokerOrderDetails.transaction_type==="BUY"?"SELL":"BUY"}
+                        const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData, order.orderDetails.baseInstrument);
+                        this.orderQueue[order.orderId].brokerExitOrderId = order_id;
+                        this.orderQueue[order.orderId].closedAt = new Date();
+                    } catch (error) {
+                        console.log(error)
+                        this.orderQueue[order.orderId].status = "ENTRY";
+                    }
     
                     
                 }
                 else if(order.status === "ENTRY" && ltp<=order.orderDetails.stopLoss){
                     console.log("SL HIT")
-                    const upstoxBroker = UpstoxBroker.getInstance();
-                    const orderData:upstoxOrderDetails = {...order.brokerOrderDetails,transaction_type:order.brokerOrderDetails.transaction_type==="BUY"?"SELL":"BUY"}
-                    const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData, order.orderDetails.baseInstrument);
-                    this.orderQueue[order.orderId].brokerExitOrderId = order_id;
-                    this.orderQueue[order.orderId].closedAt = new Date();
                     this.orderQueue[order.orderId].status = "CLOSED";
+                    try {
+                        const upstoxBroker = UpstoxBroker.getInstance();
+                        const orderData:upstoxOrderDetails = {...order.brokerOrderDetails,transaction_type:order.brokerOrderDetails.transaction_type==="BUY"?"SELL":"BUY"}
+                        const order_id = await upstoxBroker.placeOrder(this.upstox_access_token, orderData, order.orderDetails.baseInstrument);
+                        this.orderQueue[order.orderId].brokerExitOrderId = order_id;
+                        this.orderQueue[order.orderId].closedAt = new Date();
+                    } catch (error) {
+                        console.log(error)
+                        this.orderQueue[order.orderId].status = "ENTRY";
+                    }
                 }
             } 
         })
