@@ -32,6 +32,18 @@ export const router = (app: Express) => {
         }
     });
 
+    app.post("/cancel-order", async (req: Request, res: Response) => {
+        try {
+            const {order_id, access_token}=req.body
+            const monitor = Monitor.getInstance(access_token);
+            const result=await monitor.cancelOrder(order_id);
+            res.json(result);
+        } catch (error) {
+            console.log(error)
+            res.status(500).send("error while canceling order");
+        }
+      })
+
     app.post("/get-orderQueue", (req: Request, res: Response) => {
         try {
             const {access_token}=req.body

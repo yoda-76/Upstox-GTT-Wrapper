@@ -186,6 +186,19 @@ export class Monitor {
         return orderId
     }
 
+    public async cancelOrder(orderId: number) {
+        const order = this.orderQueue[orderId];
+        if(order.orderDetails.broker === "UPSTOX"){
+            // const upstoxBroker = UpstoxBroker.getInstance();
+            // await upstoxBroker.cancelOrder(order.brokerOrderDetails.instrument_token, order.brokerOrderDetails.order_id);
+            this.orderQueue[orderId].status = "CANCELLED";
+        }
+        else{
+            throw new Error('Broker not supported');
+        }
+        return {message:`orderId: ${orderId} cancelled`};
+    }
+
     public getOrderQueue() {
         return this.orderQueue;
     }
