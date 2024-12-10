@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository provides a custom implementation of **Good Till Trigger (GTT) orders** for the **Upstox trading platform**. It uses the **Upstox Live Feed Wrapper** to monitor live price updates via WebSockets and automate trade execution based on entry, exit, and stop-loss parameters.
+This repository provides a custom implementation of **Good Till Trigger (GTT) orders** for the **Upstox trading platform** as Upstox doesn't offer any API support for GTT orders. It uses the **Upstox Live Feed Wrapper** to monitor live price updates via WebSockets and automate trade execution based on entry, exit, and stop-loss parameters.
 
 ## Prerequisites
 
