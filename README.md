@@ -69,3 +69,109 @@ This repository provides a custom implementation of **Good Till Trigger (GTT) or
   "access_token": "string"
 }
 ```
+
+
+
+**Description:**
+Starts monitoring for instruments linked to the provided access_token.
+
+### 2. Place Order
+**Endpoint**: 
+`POST /place-order`
+
+**Request Body**:
+```json
+{
+  "access_token": "string",
+  "orderDetails": {
+    "broker": "ZERODHA" | "UPSTOX",
+    "baseInstrument": "string",
+    "instrumentType": "FUT" | "OPT" | "EQ",
+    "expiry": "string | null",
+    "strike": "number | null",
+    "optionType": "CE" | "PE" | null,
+    "exchange": "NSE" | "BSE",
+    "qty": "number",
+    "entryPrice": "number",
+    "exitPrice": "number",
+    "entryRange": "[number, number] | null",
+    "exitRange": "[number, number] | null",
+    "stopLoss": "number",
+    "orderType": "LIMIT" | "MARKET" | "SL" | "SL-M",
+    "side": "BUY" | "SELL",
+    "productType": "I" | "D"
+  }
+}
+```
+
+**Description:**
+Places an order with the provided details.
+
+### 3. Cancel Order
+**Endpoint**: 
+`POST /cancel-order`
+
+**Request Body**:
+```json
+{
+  "access_token": "string",
+  "order_id": "string"
+}
+```
+**Description:**
+Cancels an order by order_id.
+
+### Example Workflow
+**Start Monitoring:**
+
+```bash
+curl -X POST http://localhost:3000/monitor-init \
+-H "Content-Type: application/json" \
+-d '{"access_token": "your_upstox_access_token"}'
+```
+**Place an Order:**
+
+```bash
+curl -X POST http://localhost:3000/place-order \
+-H "Content-Type: application/json" \
+-d '{
+  "access_token": "your_access_token",
+  "orderDetails": {
+    "broker": "UPSTOX",
+    "baseInstrument": "RELIANCE",
+    "instrumentType": "EQ",
+    "expiry": null,
+    "strike": null,
+    "optionType": null,
+    "exchange": "NSE",
+    "qty": 100,
+    "entryPrice": 2500,
+    "exitPrice": 2600,
+    "entryRange": null,
+    "exitRange": null,
+    "stopLoss": 2450,
+    "orderType": "LIMIT",
+    "side": "BUY",
+    "productType": "I"
+  }
+}'
+```
+**Cancel an Order:**
+
+```bash
+curl -X POST http://localhost:3000/cancel-order \
+-H "Content-Type: application/json" \
+-d '{
+  "access_token": "your_access_token",
+  "order_id": "order_id_here"
+}'
+```
+
+### How It Works
+**Live Feed:** The Upstox Live Feed Wrapper service handles the WebSocket connection to fetch real-time LTP data.
+Order Monitoring: This service monitors the LTP and triggers trades based on predefined entry price, exit price, and stop-loss levels.
+**API Usage:** Use REST APIs to initialize monitoring, place orders, and cancel orders.
+**Limitations**
+WebSocket Dependency: The system relies on uninterrupted WebSocket connectivity via the Upstox Live Feed Wrapper.
+Initialization Delay: Monitoring initialization takes approximately 5 minutes.
+License
