@@ -27,7 +27,7 @@ export class Monitor {
         const ticks = JSON.parse(message);
         // console.log(ticks);
         this.orderQueue.forEach(async (order) => {
-            //updating order queue ltp
+            //updatxing order queue ltp
             let ltp:any=undefined;
             if(ticks.feeds[order.brokerOrderDetails.instrument_token]) ltp=ticks.feeds[order.brokerOrderDetails.instrument_token].ltpc.ltp;
             if(ltp){
@@ -101,7 +101,7 @@ export class Monitor {
             const brokerInstrumentData = upstoxBroker.getInstrumentDataAsObject();
             if(order.instrumentType === "OPT"){
                 if(!order.optionType) return new Error('Option type not found');
-                instrumentDetails = brokerInstrumentData[order.exchange][order.baseInstrument][`${order.expiry} : ${order.strike}.0`][order.optionType];
+                instrumentDetails = brokerInstrumentData[order.exchange][order.baseInstrument][`${order.expiry} : ${order.strike}`][order.optionType];
                 // console.log(instrumentDetails)
             }
             else if(order.instrumentType === "EQ"){
@@ -111,66 +111,56 @@ export class Monitor {
 
             const existingOrder = this.orderQueue.filter(o=>(o.brokerOrderDetails.instrument_token === instrumentDetails.instrument_key));
             if(existingOrder[0]){
-                // console.log("c1")
-                if(existingOrder[0].status==="OPEN"){
-                // console.log("c2")
-
-                    const orignalQty = this.orderQueue[existingOrder[0].orderId].orderDetails.qty 
-                    this.orderQueue[existingOrder[0].orderId].orderDetails.qty = orignalQty + order.qty
-                    this.orderQueue[existingOrder[0].orderId].brokerOrderDetails.quantity = orignalQty + order.qty
-                    this.orderQueue[existingOrder[0].orderId].brokerOrderDetailsSL.quantity = orignalQty + order.qty
-                }else if(existingOrder[0]&&existingOrder[0].status==="ENTRY"){
-                    throw Error("Order with this instrument already exist and is executed on broker")
-                }
-
+                existingOrder.map(o=>{
+                    if(!(o.status==="CLOSED" || o.status==="CANCELLED")){ 
+                        this.orderQueue[o.orderId].status = "CANCELLED"
+                    }
+                })
             }else{
-                // console.log("c3")
-
-
-                brokerOrderDetails={
-                    quantity: order.qty,
-                    product:  order.productType,
-                    validity: "DAY",
-                    price: 0,
-                    tag: "string",
-                    instrument_token: instrumentDetails.instrument_key,
-                    order_type: "MARKET",
-                    transaction_type: order.side,
-                    disclosed_quantity: 0,
-                    trigger_price: 0,
-                    is_amo: false
-                }
-                brokerOrderDetailsSL={
-                    quantity: order.qty,
-                    product:  order.productType,
-                    validity: "DAY",
-                    price: 0,
-                    tag: "string",
-                    instrument_token: instrumentDetails.instrument_key,
-                    order_type: "SL-M",
-                    transaction_type: order.side === "BUY" ? "SELL" : "BUY",
-                    disclosed_quantity: 0,
-                    trigger_price: order.stopLoss,
-                    is_amo: false
-                  }
-
-                  this.orderQueue.push({
-                    orderId,
-                    orderDetails: order,
-                    brokerOrderDetails: brokerOrderDetails,
-                    brokerOrderDetailsSL: brokerOrderDetailsSL,
-                    brokerEntryOrderId: "", 
-                    brokerExitOrderId: "",
-                    ltp:0,
-                    status: "OPEN",
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                    closedAt: null,
-                    closedReason: null,
-                    pnl: null
-                });
-                console.log("order queue: ", this.orderQueue)
             }
+            brokerOrderDetails={
+                quantity: order.qty,
+                product:  order.productType,
+                validity: "DAY",
+                price: 0,
+                tag: "string",
+                instrument_token: instrumentDetails.instrument_key,
+                order_type: "MARKET",
+                transaction_type: order.side,
+                disclosed_quantity: 0,
+                trigger_price: 0,
+                is_amo: false
+            }
+            brokerOrderDetailsSL={
+                quantity: order.qty,
+                product:  order.productType,
+                validity: "DAY",
+                price: 0,
+                tag: "string",
+                instrument_token: instrumentDetails.instrument_key,
+                order_type: "SL-M",
+                transaction_type: order.side === "BUY" ? "SELL" : "BUY",
+                disclosed_quantity: 0,
+                trigger_price: order.stopLoss,
+                is_amo: false
+              }
+
+              this.orderQueue.push({
+                orderId,
+                orderDetails: order,
+                brokerOrderDetails: brokerOrderDetails,
+                brokerOrderDetailsSL: brokerOrderDetailsSL,
+                brokerEntryOrderId: "", 
+                brokerExitOrderId: "",
+                ltp:0,
+                status: "OPEN",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                closedAt: null,
+                closedReason: null,
+                pnl: null
+            });
+            console.log("order queue: ", this.orderQueue)
             
             
             

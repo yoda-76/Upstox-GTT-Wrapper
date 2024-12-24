@@ -135,10 +135,10 @@ export class UpstoxBroker {
 
   private async loadInstrumentData() {
     try {
-      const folderPath = path.join(__dirname, 'token_data');
-      const compressedFilePath = path.join(folderPath, 'instrument_data.csv.gz');
-      const decompressedFilePath = path.join(folderPath, 'instrument_data.csv');
-      
+      const folderPath = path.join(__dirname, "..", "..", "..", 'upstox_token_data');
+      const compressedFilePath = path.join(folderPath, 'instrument_data.json');
+      const decompressedFilePath = path.join(folderPath, 'instrument_data2.json');
+
       // Ensure the directory exists
       if (!fs.existsSync(folderPath)) {
         fs.mkdirSync(folderPath);
@@ -147,7 +147,7 @@ export class UpstoxBroker {
       // Download and decompress instrument data
       await axios({
         method: 'get',
-        url: 'https://assets.upstox.com/market-quote/instruments/exchange/complete.csv.gz',
+        url: 'https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz',
         responseType: 'stream',
       }).then((response) => {
         const writer = fs.createWriteStream(compressedFilePath);
@@ -168,18 +168,32 @@ export class UpstoxBroker {
       });
 
       // Convert CSV to JSON and structure data
-      const jsonArray = await csvtojson().fromFile(decompressedFilePath);
+      // const jsonArray = await csvtojson().fromFile(decompressedFilePath);
+      const unparsedJsonArray: any = fs.readFileSync(decompressedFilePath, 'utf8');
+      const jsonArray = JSON.parse(unparsedJsonArray);
 
+      //fetch kite instruments
+      // const kiteAccessToken = await redisClient.get('KITE_CONNECT_access_token');
+      // const kiteInstruments = await fetchInstruments(process.env.KITE_API_KEY, kiteAccessToken);
       this.instrumentData = this.structureInstrumentData(jsonArray);  // Structure the data
+      // this.instrumentData = kiteInstruments  // Structure the data
+
 
       console.log('Instrument data loaded into memory and structured');
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Error loading instrument data:', error.message || error);
     }
   }
-  
+
   // Structure instrument data for quick access
   private structureInstrumentData(jsonArray: any[]): Record<string, any> {
+    const equityMap = () => {
+      const map = equitySymbols.reduce((acc:any, key) => {
+        acc[key] = {};
+        return acc;
+      }, {});
+      return map
+    }
     const structuredData: Record<string, any> = {
       "NSE": {
         "INDEX": {
@@ -188,12 +202,25 @@ export class UpstoxBroker {
           "FINNIFTY": {},
         },
         "EQUITY": {},
+        "EQUITY_OPTION": equityMap(),
+        "FUTURES": {
+          "EQUITY": equityMap(),
+          "NIFTY": {},
+          "BANKNIFTY": {},
+          "FINNIFTY": {},
+        },
         "BANKNIFTY": {},
         "FINNIFTY": {},
-        "NIFTY": {}
+        "NIFTY": {},
       },
       "BSE": {
         "INDEX": {
+          "BANKEX": {},
+          "SENSEX": {}
+        },
+        "EQUITY_OPTION": equityMap(),
+        "FUTURES": {
+          "EQUITY": equityMap(),
           "BANKEX": {},
           "SENSEX": {}
         },
@@ -205,156 +232,188 @@ export class UpstoxBroker {
         "INDEX": {
           "CRUDEOIL": {}
         },
-        "CRUDEOIL":{}
+        "CRUDEOIL": {}
       }
     };
 
-    const isNifty50Option = /^NIFTY\d{2}([A-Z]{3}|\d{3})\d{5}(CE|PE)$/;
 
     jsonArray.forEach(instrument => {
-      const { name, instrument_type, tradingsymbol, option_type, expiry, strike, exchange } = instrument;
+      const { instrument_type, trading_symbol, segment, underlying_symbol } = instrument;
+      // console.log(instrument,"\n", typeof instrument.expiry)
 
       // Index handling
       if (instrument_type === "INDEX") {
-        if (name === "Nifty 50") structuredData.NSE.INDEX.NIFTY = instrument;
-        if (name === "Nifty Bank") structuredData.NSE.INDEX.BANKNIFTY = instrument;
-        if (name === "Nifty Fin Service") structuredData.NSE.INDEX.FINNIFTY = instrument;
+        if (trading_symbol === "NIFTY") structuredData.NSE.INDEX.NIFTY = instrument;
+        if (trading_symbol === "BANKNIFTY") structuredData.NSE.INDEX.BANKNIFTY = instrument;
+        if (trading_symbol === "FINNIFTY") structuredData.NSE.INDEX.FINNIFTY = instrument;
 
-        if (name === "SENSEX") structuredData.BSE.INDEX.SENSEX = instrument;
-        if (name === "BANKEX") structuredData.BSE.INDEX.BANKEX = instrument;
+        if (trading_symbol === "SENSEX") structuredData.BSE.INDEX.SENSEX = instrument;
+        if (trading_symbol === "BANKEX") structuredData.BSE.INDEX.BANKEX = instrument;
 
 
       }
 
       // Options handling
-      if (instrument_type === "OPTIDX" && exchange === "NSE_FO") {
-        if (option_type === "CE") {
-          const baseSymbol = tradingsymbol.slice(0, -2);
+      if (segment === "NSE_FO" || segment === "BSE_FO") {
+        const strike = instrument.strike_price;
+        const date = new Date(Number(instrument.expiry));
+        // Format the date as YYYY-MM-DD
+        const expiry = date.toISOString().split('T')[0];
+        if (instrument_type === "CE" || instrument_type === "PE") {
 
-          // Match CE with PE
-          jsonArray.forEach(otherInstrument => {
-            if (otherInstrument.option_type === "PE") {
-              const otherBaseSymbol = otherInstrument.tradingsymbol.slice(0, -2);
-
-              if (baseSymbol === otherBaseSymbol) {
-                if (tradingsymbol.includes("BANKNIFTY")) {
-                  structuredData.NSE.BANKNIFTY[`${expiry} : ${strike}`] = { CE: instrument, PE: otherInstrument };
-                } else if (tradingsymbol.includes("FINNIFTY")) {
-                  structuredData.NSE.FINNIFTY[`${expiry} : ${strike}`] = { CE: instrument, PE: otherInstrument };
-                } else if (isNifty50Option.test(tradingsymbol)) {
-                  structuredData.NSE.NIFTY[`${expiry} : ${strike}`] = { CE: instrument, PE: otherInstrument };
-                }
+          if (underlying_symbol === "BANKNIFTY") {
+            if (instrument_type === "CE") {
+              if (!structuredData.NSE.BANKNIFTY[`${expiry} : ${strike}`]) {
+                structuredData.NSE.BANKNIFTY[`${expiry} : ${strike}`] = { CE: instrument, PE: null };
+              } else {
+                structuredData.NSE.BANKNIFTY[`${expiry} : ${strike}`].CE = instrument;
+              }
+            } else if (instrument_type === "PE") {
+              if (!structuredData.NSE.BANKNIFTY[`${expiry} : ${strike}`]) {
+                structuredData.NSE.BANKNIFTY[`${expiry} : ${strike}`] = { CE: null, PE: instrument };
+              } else {
+                structuredData.NSE.BANKNIFTY[`${expiry} : ${strike}`].PE = instrument;
               }
             }
-          });
+
+          }
+          else if (underlying_symbol === "FINNIFTY") {
+
+            if (instrument_type === "CE") {
+              if (!structuredData.NSE.FINNIFTY[`${expiry} : ${strike}`]) {
+                structuredData.NSE.FINNIFTY[`${expiry} : ${strike}`] = { CE: instrument, PE: null };
+              } else {
+                structuredData.NSE.FINNIFTY[`${expiry} : ${strike}`].CE = instrument;
+              }
+            } else if (instrument_type === "PE") {
+              if (!structuredData.NSE.FINNIFTY[`${expiry} : ${strike}`]) {
+                structuredData.NSE.FINNIFTY[`${expiry} : ${strike}`] = { CE: null, PE: instrument };
+              } else {
+                structuredData.NSE.FINNIFTY[`${expiry} : ${strike}`].PE = instrument;
+              }
+            }
+          } else if (underlying_symbol === "NIFTY") {
+            if (instrument_type === "CE") {
+              if (!structuredData.NSE.NIFTY[`${expiry} : ${strike}`]) {
+                structuredData.NSE.NIFTY[`${expiry} : ${strike}`] = { CE: instrument, PE: null };
+              } else {
+                structuredData.NSE.NIFTY[`${expiry} : ${strike}`].CE = instrument;
+              }
+            } else if (instrument_type === "PE") {
+              if (!structuredData.NSE.NIFTY[`${expiry} : ${strike}`]) {
+                structuredData.NSE.NIFTY[`${expiry} : ${strike}`] = { CE: null, PE: instrument };
+              } else {
+                structuredData.NSE.NIFTY[`${expiry} : ${strike}`].PE = instrument;
+              }
+            }
+          } else if (underlying_symbol === "SENSEX") {
+            if (instrument_type === "CE") {
+              if (!structuredData.BSE.SENSEX[`${expiry} : ${strike}`]) {
+                structuredData.BSE.SENSEX[`${expiry} : ${strike}`] = { CE: instrument, PE: null };
+              } else {
+                structuredData.BSE.SENSEX[`${expiry} : ${strike}`].CE = instrument;
+              }
+            } else if (instrument_type === "PE") {
+              if (!structuredData.BSE.SENSEX[`${expiry} : ${strike}`]) {
+                structuredData.BSE.SENSEX[`${expiry} : ${strike}`] = { CE: null, PE: instrument };
+              } else {
+                structuredData.BSE.SENSEX[`${expiry} : ${strike}`].PE = instrument;
+              }
+            }
+          } else if (underlying_symbol === "BANKEX") {
+            if (instrument_type === "CE") {
+              if (!structuredData.BSE.BANKEX[`${expiry} : ${strike}`]) {
+                structuredData.BSE.BANKEX[`${expiry} : ${strike}`] = { CE: instrument, PE: null };
+              } else {
+                structuredData.BSE.BANKEX[`${expiry} : ${strike}`].CE = instrument;
+              }
+            } else if (instrument_type === "PE") {
+              if (!structuredData.BSE.BANKEX[`${expiry} : ${strike}`]) {
+                structuredData.BSE.BANKEX[`${expiry} : ${strike}`] = { CE: null, PE: instrument };
+              } else {
+                structuredData.BSE.BANKEX[`${expiry} : ${strike}`].PE = instrument;
+              }
+            }
+          }
+          else if (equitySymbols.includes(underlying_symbol)) {
+            if (instrument_type === "CE") {
+
+              if (!structuredData.NSE.EQUITY_OPTION[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`]) {
+                structuredData.NSE.EQUITY_OPTION[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`] = { CE: instrument, PE: null };
+              } else {
+                structuredData.NSE.EQUITY_OPTION[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`].CE = instrument;
+              }
+            } else if (instrument_type === "PE") {
+              if (!structuredData.NSE.EQUITY_OPTION[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`]) {
+                structuredData.NSE.EQUITY_OPTION[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`] = { CE: null, PE: instrument };
+              } else {
+                structuredData.NSE.EQUITY_OPTION[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`].PE = instrument;
+              }
+            }
+          }
         }
-      }else if(instrument_type === "EQUITY" && exchange === "NSE_EQ" && equitySymbols.includes(tradingsymbol)){
-        structuredData.NSE.EQUITY[tradingsymbol] = instrument;
-      }else if(instrument_type === "EQUITY" && exchange === "BSE_EQ" && equitySymbols.includes(tradingsymbol)){
-        structuredData.BSE.EQUITY[tradingsymbol] = instrument;
-      }else if(instrument_type === "FUTCOM" && exchange === "MCX_FO" && name === "CRUDE OIL" && (option_type === "PE" || option_type === "CE")){
-        if (option_type === "CE") {
-          const baseSymbol = tradingsymbol.slice(0, -2);
-
-          // Match CE with PE
-          jsonArray.forEach(otherInstrument => {
-            if (otherInstrument.option_type === "PE") {
-              const otherBaseSymbol = otherInstrument.tradingsymbol.slice(0, -2);
-
-              if (baseSymbol === otherBaseSymbol) {
-                if (tradingsymbol.includes("CRUDEOIL")) {
-                  structuredData.MCX.CRUDEOIL[`${expiry} : ${strike}.0`] = { CE: instrument, PE: otherInstrument };
-                }
-              }
+        else if (instrument_type === "FUT") {
+          if (underlying_symbol === "BANKNIFTY") {
+            if (!structuredData.NSE.FUTURES.BANKNIFTY[`${expiry} : ${strike}`]) {
+              structuredData.NSE.FUTURES.BANKNIFTY[`${expiry} : ${strike}`] = instrument;
             }
-          });
-        }
-      }else if(instrument_type === "OPTIDX" && exchange === "BSE_FO"){
-        if (option_type === "CE") {
-          const baseSymbol = tradingsymbol.slice(0, -2);
-
-          // Match CE with PE
-          jsonArray.forEach(otherInstrument => {
-            if (otherInstrument.option_type === "PE") {
-              const otherBaseSymbol = otherInstrument.tradingsymbol.slice(0, -2);
-
-              if (baseSymbol === otherBaseSymbol) {
-                if (tradingsymbol.includes("SENSEX")) {
-                  structuredData.BSE.SENSEX[`${expiry} : ${strike}.0`] = { CE: instrument, PE: otherInstrument };
-                } else if (tradingsymbol.includes("BANKEX")) {
-                  structuredData.BSE.BANKEX[`${expiry} : ${strike}.0`] = { CE: instrument, PE: otherInstrument };
-                }
-              }
+          }
+          else if (underlying_symbol === "NIFTY") {
+            if (!structuredData.NSE.FUTURES.NIFTY[`${expiry} : ${strike}`]) {
+              structuredData.NSE.FUTURES.NIFTY[`${expiry} : ${strike}`] = instrument;
             }
-          });
+          } else if (underlying_symbol === "FINNIFTY") {
+            if (!structuredData.NSE.FUTURES.FINNIFTY[`${expiry} : ${strike}`]) {
+              structuredData.NSE.FUTURES.FINNIFTY[`${expiry} : ${strike}`] = instrument;
+            }
+          } else if (underlying_symbol === "BANKEX") {
+            if (!structuredData.BSE.FUTURES.BANKEX[`${expiry} : ${strike}`]) {
+              structuredData.BSE.FUTURES.BANKEX[`${expiry} : ${strike}`] = instrument;
+            }
+          } else if (underlying_symbol === "SENSEX") {
+            if (!structuredData.BSE.FUTURES.SENSEX[`${expiry} : ${strike}`]) {
+              structuredData.BSE.FUTURES.SENSEX[`${expiry} : ${strike}`] = instrument;
+            }
+          }
+          else if (equitySymbols.includes(underlying_symbol)) {
+            if (segment === "NSE_FO" && !structuredData.NSE.FUTURES.EQUITY[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`]) {
+              structuredData.NSE.FUTURES.EQUITY[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`] = instrument;
+            } else if (segment === "BSE_FO" && !structuredData.BSE.FUTURES.EQUITY[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`]) {
+              structuredData.BSE.FUTURES.EQUITY[underlying_symbol][`${underlying_symbol} : ${expiry} : ${strike}`] = instrument;
+            }
+          }
         }
       }
+      else if (instrument_type === "EQ" && segment === "NSE_EQ" && equitySymbols.includes(trading_symbol)) {
+        structuredData.NSE.EQUITY[trading_symbol] = instrument;
+      } else if (segment === "BSE_EQ" && equitySymbols.includes(trading_symbol)) {
+
+        structuredData.BSE.EQUITY[trading_symbol] = instrument;
+      }
+      // else if(instrument_type === "FUTCOM" && exchange === "MCX_FO" && name === "CRUDE OIL" && (option_type === "PE" || option_type === "CE")){
+      //   if (option_type === "CE") {
+      //     const baseSymbol = trading_symbol.slice(0, -2);
+
+      //     // Match CE with PE
+      //     jsonArray.forEach(otherInstrument => {
+      //       if (otherInstrument.option_type === "PE") {
+      //         const otherBaseSymbol = otherInstrument.trading_symbol.slice(0, -2);
+
+      //         if (baseSymbol === otherBaseSymbol) {
+      //           if (trading_symbol.includes("CRUDEOIL")) {
+      //             structuredData.MCX.CRUDEOIL[`${expiry} : ${strike}.0`] = { CE: instrument, PE: otherInstrument };
+      //           }
+      //         }
+      //       }
+      //     });
+      //   }
+      // }
+
     });
-
-    // kiteInstruments.map((instrument) => {
-    //   if(instrument.segment === "NFO-OPT" && (instrument.name === "NIFTY" || instrument.name === "BANKNIFTY" || instrument.name === "FINNIFTY") && (instrument.instrument_type === "PE" || instrument.instrument_type === "CE") &&structuredData.NSE[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`] && structuredData.NSE[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`][instrument.instrument_type]){
-    //     structuredData.NSE[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`][instrument.instrument_type].ltpToken = instrument.instrument_token;
-
-    //     //add ltp token to subscribed instruments list
-    //     this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     //create a map with symbol from broker as key and info from broker + info from kite as value
-    //     const upstoxData = structuredData.NSE[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`][instrument.instrument_type];
-    //     this.instrumentDataSearchMap[upstoxData.tradingsymbol] ={...upstoxData, ...instrument}; 
-        
-    //   }else if(instrument.segment === "BFO-OPT" && (instrument.name === "BANKEX" || instrument.name === "SENSEX") && (instrument.instrument_type === "PE" || instrument.instrument_type === "CE") &&structuredData.BSE[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`] && structuredData.BSE[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`][instrument.instrument_type]){
-    //     structuredData.BSE[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`][instrument.instrument_type].ltpToken = instrument.instrument_token;
-
-    //     //add ltp token to subscribed instruments list
-    //     this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     //create a map with symbol from broker as key and info from broker + info from kite as value
-    //     const upstoxData = structuredData.BSE[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`][instrument.instrument_type];
-    //     this.instrumentDataSearchMap[upstoxData.tradingsymbol] ={...upstoxData, ...instrument}; 
-        
-    //   }else if( instrument.segment === "INDICES" ){
-    //     if (instrument.name === "NIFTY 50") {
-    //       structuredData.NSE.INDEX.NIFTY.ltpToken = instrument.instrument_token;
-    //       this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     }
-    //     else if (instrument.name === "NIFTY BANK"){
-    //       structuredData.NSE.INDEX.BANKNIFTY.ltpToken = instrument.instrument_token;
-    //       this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     }
-    //     else if (instrument.name === "NIFTY FIN SERVICE") {
-    //       structuredData.NSE.INDEX.FINNIFTY.ltpToken = instrument.instrument_token;
-    //       this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     }
-    //     else if(instrument.name === "SENSEX") {
-    //       structuredData.BSE.INDEX.SENSEX.ltpToken = instrument.instrument_token;
-    //       this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     }
-    //     else if(instrument.name === "BSE INDEX BANKEX") {
-    //       structuredData.BSE.INDEX.BANKEX.ltpToken = instrument.instrument_token;
-    //       this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     }else if(instrument.name === "MCXCRUDEX") {
-    //       structuredData.MCX.INDEX.CRUDEOIL.ltpToken = instrument.instrument_token;
-    //       this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     }
-    //   }else if(instrument.instrument_type === "EQ" &&structuredData.NSE.EQUITY[instrument.tradingsymbol]){
-    //     if(instrument.segment === "NSE"){
-    //       structuredData.NSE.EQUITY[instrument.tradingsymbol].ltpToken = instrument.instrument_token;
-    //       this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     }else if(instrument.segment === "BSE"){
-    //       structuredData.BSE.EQUITY[instrument.tradingsymbol].ltpToken = instrument.instrument_token;
-    //       this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     }
-    //   }else if(instrument.segment === "MCX-OPT" && instrument.name === "CRUDEOIL" && structuredData.MCX[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`] && structuredData.MCX[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`][instrument.instrument_type]){
-    //     structuredData.MCX[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`][instrument.instrument_type].ltpToken = instrument.instrument_token;
-
-    //     //add ltp token to subscribed instruments list
-    //     this.tokenToBeSubscribed.push(Number(instrument.instrument_token));
-    //     //create a map with symbol from broker as key and info from broker + info from kite as value
-    //     const upstoxData = structuredData.MCX[instrument.name][`${instrument.expiry} : ${instrument.strike}.0`][instrument.instrument_type];
-    //     this.instrumentDataSearchMap[upstoxData.tradingsymbol] ={...upstoxData, ...instrument}; 
-        
-    //   }
-    // })
-
+    // return structuredData;
     return structuredData;
+
+    // return optionSearchMap
   }
 
   // Get instrument from memory
