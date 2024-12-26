@@ -2,6 +2,7 @@ import axios from "axios";
 import { UpstoxBroker } from "../brokers/upstox";
 import { OrderDetails, OrderQueue, upstoxOrderDetails } from "../interface";
 import { socketRedisClient } from "../lib/redis";
+import { extractExpiryAndStrike } from "../utils/extractExpiryAndStrike";
 export class Monitor {
     // private static Socket:any;
     private upstox_access_token:string="";
@@ -16,7 +17,6 @@ export class Monitor {
             Monitor.instance = new Monitor();
             Monitor.instance.upstox_access_token=access_token;
             Monitor.instance.socketClientInitialize();
-            axios.post('http://localhost:3001/market-feed-init', {access_token});
         }
         return Monitor.instance;
     }
@@ -84,6 +84,7 @@ export class Monitor {
         });
     }
 
+    
 
     public async addOrder(order: OrderDetails) {
 
@@ -101,8 +102,17 @@ export class Monitor {
             const brokerInstrumentData = upstoxBroker.getInstrumentDataAsObject();
             if(order.instrumentType === "OPT"){
                 if(!order.optionType) return new Error('Option type not found');
-                instrumentDetails = brokerInstrumentData[order.exchange][order.baseInstrument][`${order.expiry} : ${order.strike}`][order.optionType];
-                // console.log(instrumentDetails)
+                const tempExpiryDates:string[] = [];
+                Object.keys(brokerInstrumentData[order.exchange][order.baseInstrument]).map((op) => {
+                    const result = extractExpiryAndStrike(op);
+                    if (!tempExpiryDates.includes(result.expiryDate))
+                        tempExpiryDates.push(result.expiryDate);
+                    });
+                    tempExpiryDates.sort((date1: string, date2: string) => new Date(date1).getTime() - new Date(date2).getTime());
+                    const latestExpiryDate = tempExpiryDates[0];
+
+
+                instrumentDetails = brokerInstrumentData[order.exchange][order.baseInstrument][`${latestExpiryDate} : ${order.strike}`][order.optionType];
             }
             else if(order.instrumentType === "EQ"){
                 instrumentDetails = brokerInstrumentData[order.exchange].EQUITY[order.baseInstrument];
@@ -176,7 +186,9 @@ export class Monitor {
     }
 
     public async cancelOrder(orderId: number) {
+        if(!this.orderQueue[0]) throw new Error('Order Queue is Empty');
         const order = this.orderQueue[orderId];
+        if(!order) throw new Error('Order not found');
         if(order.orderDetails.broker === "UPSTOX"){
             // const upstoxBroker = UpstoxBroker.getInstance();
             // await upstoxBroker.cancelOrder(order.brokerOrderDetails.instrument_token, order.brokerOrderDetails.order_id);

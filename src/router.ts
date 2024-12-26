@@ -3,6 +3,7 @@ import { OrderDetails, zerodhaOrderDetails } from "./interface";
 import { UpstoxBroker } from "./brokers/upstox";
 import { Monitor } from "./core/monitor";
 import { ZerodhaBroker } from "./brokers/zerodha";
+import axios from "axios";
 
 export const router = (app: Express) => {  
 
@@ -10,12 +11,15 @@ export const router = (app: Express) => {
 
         try{
             const {access_token}=req.body
+            const resp=await axios.post('http://localhost:3001/market-feed-init', {access_token});
+            console.log(resp);
+
             await  Monitor.getInstance(access_token);
             await UpstoxBroker.getInstance();
             res.send("success");
         }catch(e){
             console.log(e)
-            res.status(500).send("error while initializing monitor");
+            res.status(500).json({message:"Error while initializing monitor, Check the access token & restart service."});
         }
     })
 
@@ -28,7 +32,7 @@ export const router = (app: Express) => {
             res.json({message:"success", data:{id}});
         } catch (error) {
             console.log(error)
-            res.status(500).send("error while placing order in upstox");
+            res.status(500).send("Service not initialised properly.Restart the service with correct access token.");
         }
     });
 
@@ -38,9 +42,9 @@ export const router = (app: Express) => {
             const monitor = Monitor.getInstance(access_token);
             const result=await monitor.cancelOrder(order_id);
             res.json(result);
-        } catch (error) {
+        } catch (error: any) {
             console.log(error)
-            res.status(500).send("error while canceling order");
+            res.status(500).json({message:error.message});
         }
       })
 
