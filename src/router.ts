@@ -29,10 +29,11 @@ export const router = (app: Express) => {
             const {orderDetails, access_token}:{orderDetails : OrderDetails, access_token:string} = req.body
             const monitor = Monitor.getInstance(access_token);
             const id=await monitor.addOrder(orderDetails);
-            res.json({message:"success", data:{id}});
+            if(!id) res.status(500).send("check order parameters again");
+            else res.json({message:"success", data:{id}});
         } catch (error) {
             console.log(error)
-            res.status(500).send("Service not initialised properly.Restart the service with correct access token.");
+            res.status(500).send("check order parameters again");
         }
     });
 
