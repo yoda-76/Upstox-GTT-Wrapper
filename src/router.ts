@@ -29,7 +29,7 @@ export const router = (app: Express) => {
             const {orderDetails, access_token}:{orderDetails : OrderDetails, access_token:string} = req.body
             const monitor = Monitor.getInstance(access_token);
             const id=await monitor.addOrder(orderDetails);
-            if(!id) res.status(500).send("check order parameters again");
+            if(!id) res.status(500).send("upstox error");
             else res.json({message:"success", data:{id}});
         } catch (error) {
             console.log(error)
