@@ -7,7 +7,7 @@ import { extractExpiryAndStrike } from "../utils/extractExpiryAndStrike";
 export class Monitor {
     private upstox_access_token: string = "";
     private orderMap: Map<number, OrderQueue> = new Map();
-    private currentIndex: number = 0;
+    private currentIndex: number = 1;
     private static instance: Monitor;
 
     constructor() {}
@@ -134,6 +134,7 @@ export class Monitor {
 
     public async addOrder(order: OrderDetails) {
         const orderId = this.currentIndex++;
+        let expiry: string;
         let instrumentDetails: any;
         let brokerOrderDetails: upstoxOrderDetails;
         let brokerOrderDetailsSL: upstoxOrderDetails;
@@ -141,11 +142,12 @@ export class Monitor {
         if (order.broker === "UPSTOX") {
             const upstoxBroker = UpstoxBroker.getInstance();
             const brokerInstrumentData = upstoxBroker.getInstrumentDataAsObject();
-            
-            instrumentDetails = await this.getInstrumentDetails(
+            const data = await this.getInstrumentDetails(
                 order, 
                 brokerInstrumentData
-            );
+            ); 
+            instrumentDetails = data.instrumentData
+            expiry = data.expiry
 
             // Check for existing active orders for the same instrument
             for (const [_, existingOrder] of this.orderMap) {
@@ -175,10 +177,9 @@ export class Monitor {
                 transaction_type: order.side === "BUY" ? "SELL" : "BUY",
                 trigger_price: order.stopLoss
             };
-
             const newOrder: OrderQueue = {
                 orderId,
-                orderDetails: order,
+                orderDetails: {...order, expiry: expiry},
                 brokerOrderDetails,
                 brokerOrderDetailsSL,
                 brokerEntryOrderId: "",
@@ -191,6 +192,7 @@ export class Monitor {
                 closedReason: null,
                 pnl: null
             };
+            console.log("New Order: ", newOrder);
 
             this.orderMap.set(orderId, newOrder);
 
@@ -204,6 +206,24 @@ export class Monitor {
         } else {
             throw new Error('Broker not supported');
         }
+    }
+
+    public editOrder(orderId: number, order: {entryPrice: number ;
+        exitPrice: number ,
+        entryRange: number[] | null,
+        exitRange: number[] | null,
+        stopLoss: number }) {
+        const existingOrder = this.orderMap.get(orderId);
+        if (!existingOrder) throw new Error('Order not found');
+        existingOrder.orderDetails.entryPrice = order.entryPrice;
+        existingOrder.orderDetails.exitPrice = order.exitPrice;
+        existingOrder.orderDetails.entryRange = order.entryRange;
+        existingOrder.orderDetails.exitRange = order.exitRange;
+        existingOrder.orderDetails.stopLoss = order.stopLoss;
+        existingOrder.updatedAt = new Date();
+
+        this.orderMap.set(orderId, existingOrder);
+        return true
     }
 
     private async getInstrumentDetails(order: OrderDetails, brokerInstrumentData: any) {
@@ -223,10 +243,11 @@ export class Monitor {
             );
             
             const latestExpiryDate = tempExpiryDates[0];
-            return brokerInstrumentData[order.exchange][order.baseInstrument]
-                [`${latestExpiryDate} : ${order.strike}`][order.optionType];
+            return {instrumentData:brokerInstrumentData[order.exchange][order.baseInstrument]
+                [`${latestExpiryDate} : ${order.strike}`][order.optionType], expiry: latestExpiryDate};
         } else if (order.instrumentType === "EQ") {
-            return brokerInstrumentData[order.exchange].EQUITY[order.baseInstrument];
+            // return brokerInstrumentData[order.exchange].EQUITY[order.baseInstrument];
+            return {instrumentData:brokerInstrumentData[order.exchange].EQUITY[order.baseInstrument], expiry: ""};
         }
         
         throw new Error('Invalid instrument type');

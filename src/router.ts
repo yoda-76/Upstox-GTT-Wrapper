@@ -37,6 +37,19 @@ export const router = (app: Express) => {
         }
     });
 
+    app.post("/edit-order", async (req: Request, res: Response) => {
+        try {
+            const {editOrderDetails, access_token}=req.body
+            const monitor = Monitor.getInstance(access_token);
+            const result= monitor.editOrder(editOrderDetails.order_id, editOrderDetails);
+            if(result) res.json("order update success");
+            else res.status(500).json({message:"there was some problem in order update, please check the orderQueue try"});
+        } catch (error: any) {
+            console.log(error)
+            res.status(500).json({message:error.message});
+        }
+    })
+
     app.post("/cancel-order", async (req: Request, res: Response) => {
         try {
             const {order_id, access_token}=req.body
